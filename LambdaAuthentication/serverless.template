@@ -1,0 +1,115 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "An AWS Serverless Application.",
+  "Resources": {
+    "PolicyFunctionLogin":{
+        "Type" : "AWS::IAM::ManagedPolicy",
+        "DependsOn": "DynamoDBUserTable",
+        "Properties" : {
+            "PolicyDocument" : {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "ReadOnlyAPIActionsOnBooks",
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:GetItem",
+                            "dynamodb:BatchGetItem",
+                            "dynamodb:Scan",
+                            "dynamodb:Query",
+                            "dynamodb:ConditionCheckItem"
+                        ],
+                        "Resource": [
+                            "arn:aws:dynamodb:*:825475072754:table/Users"
+                        ]
+                    }
+                ]
+            }
+        }
+    },
+    "FunctionLogin": {
+      "Type": "AWS::Serverless::Function",
+      "DependsOn": "PolicyFunctionLogin",
+      "Properties": {
+        "Handler": "LambdaAuthentication::LambdaAuthentication.Functions::GenerateJsonWebToken",
+        "Runtime": "dotnetcore3.1",
+        "CodeUri": "",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Policies": [
+          "AWSLambdaBasicExecutionRole",
+          { "Ref" : "PolicyFunctionLogin" }
+        ],
+        "Environment": {
+            "Variables": {
+                "jwtIssuer": "MyIssuer",
+                "jwtKey": "ThisismySecretKey"
+            }
+        },
+        "Events": {
+          "RootGet": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/login",
+              "Method": "POST"
+            }
+          }
+        }
+      }
+    },
+    "FunctionValidateToken": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "Handler": "LambdaAuthentication::LambdaAuthentication.Functions::ValidateJsonWebToken",
+        "Runtime": "dotnetcore3.1",
+        "CodeUri": "",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Policies": [
+          "AWSLambdaBasicExecutionRole"
+        ],
+        "Environment": {
+            "Variables": {
+                "jwtIssuer": "MyIssuer",
+                "jwtKey": "ThisismySecretKey"
+            }
+        },
+        "Events": {
+          "RootGet": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/validateToken",
+              "Method": "POST"
+            }
+          }
+        }
+      }
+    },
+    "DynamoDBUserTable": {
+        "Type" : "AWS::DynamoDB::Table",
+        "Properties" : {
+            "AttributeDefinitions" : [ 
+                { "AttributeName" : "UserName", "AttributeType" : "S" }
+            ],
+            "KeySchema": [
+                { "AttributeName" : "UserName", "KeyType" : "HASH" }
+            ],
+            "BillingMode" : "PROVISIONED",
+            "TableName" : "Users",
+            "ProvisionedThroughput" : {
+                "ReadCapacityUnits" : 100,
+                "WriteCapacityUnits" : 100
+            }
+        }
+    }
+  },
+  "Outputs": {
+    "ApiURL": {
+      "Description": "API endpoint URL for Prod environment",
+      "Value": {
+        "Fn::Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+      }
+    }
+  }
+}
