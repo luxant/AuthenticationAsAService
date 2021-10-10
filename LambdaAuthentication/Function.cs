@@ -11,6 +11,11 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using AuthenticationAsAService.Models;
+using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.Model;
+using Amazon.DynamoDBv2.DocumentModel;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -19,13 +24,30 @@ namespace LambdaAuthentication
 {
     public static class Functions
     {
-        public static APIGatewayProxyResponse GenerateJsonWebToken(APIGatewayProxyRequest request, ILambdaContext context)
+        public static async Task<APIGatewayProxyResponse> Login(APIGatewayProxyRequest request, ILambdaContext context)
         {
+            var user = JsonSerializer.Deserialize<UserModel>(request.Body);
+
+            QueryResponse response = await GetUserByName(user.UserName);
+
+            if (response.Count == 0)
+            {
+                return new APIGatewayProxyResponse {  
+                    StatusCode = (int)HttpStatusCode.NotFound,
+                    Body = JsonSerializer.Serialize(new
+                    {
+                        Message = "User was not found"
+                    })
+                };
+            }
+
             var jwtIssuer = Environment.GetEnvironmentVariable("jwtIssuer");
             var jwtKey = Environment.GetEnvironmentVariable("jwtKey");
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+            var expireDate = DateTime.Now.AddMinutes(120);
 
             var token = new JwtSecurityToken(
                 issuer: jwtIssuer,
@@ -35,22 +57,21 @@ namespace LambdaAuthentication
                     new Claim(JwtRegisteredClaimNames.GivenName, "Awsome"),
                     new Claim(JwtRegisteredClaimNames.Birthdate, "yesterday"),
                 },
-                expires: DateTime.Now.AddMinutes(120),
+                expires: expireDate,
                 signingCredentials: credentials);
 
-            var stringBody = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                Token = new JwtSecurityTokenHandler().WriteToken(token)
-            });
-
-            var response = new APIGatewayProxyResponse
+            return new APIGatewayProxyResponse
             {
                 StatusCode = (int)HttpStatusCode.OK,
-                Body = stringBody,
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                Body = JsonSerializer.Serialize(new
+                {
+                    Token = new JwtSecurityTokenHandler().WriteToken(token),
+                    ExpireDate = expireDate
+                }),
+                Headers = new Dictionary<string, string> {
+                    { "Content-Type", "application/json" }
+                }
             };
-
-            return response;
         }
 
         public static APIGatewayProxyResponse ValidateJsonWebToken(APIGatewayProxyRequest request, ILambdaContext context)
@@ -63,6 +84,14 @@ namespace LambdaAuthentication
                 return new APIGatewayProxyResponse
                 {
                     StatusCode = (int)HttpStatusCode.BadRequest,
+                    Body = JsonSerializer.Serialize(new
+                    {
+                        Message = "Authorzation token not found"
+                    }),
+                    Headers = new Dictionary<string, string>
+                    {
+                        { "Content-Type", "application/json" }
+                    }
                 };
             }
 
@@ -105,7 +134,10 @@ namespace LambdaAuthentication
                 {
                     StatusCode = (int)HttpStatusCode.OK,
                     Body = stringBody,
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                    Headers = new Dictionary<string, string> 
+                    { 
+                        { "Content-Type", "application/json" }
+                    }
                 };
 
                 return response;
@@ -119,6 +151,81 @@ namespace LambdaAuthentication
                     StatusCode = (int)HttpStatusCode.Unauthorized,
                 };
             }
+        }
+
+        public static async Task<APIGatewayProxyResponse> CreateUser(APIGatewayProxyRequest request, ILambdaContext context)
+        {
+            var user = JsonSerializer.Deserialize<UserModel>(request.Body);
+
+            try
+            {
+                QueryResponse userQuery = await GetUserByName(user.UserName);
+
+                if (userQuery.Count > 0)
+                {
+                    return new APIGatewayProxyResponse
+                    {
+                        StatusCode = (int)HttpStatusCode.InternalServerError,
+                        Body = JsonSerializer.Serialize(new
+                        {
+                            Message = "User already exist"
+                        }),
+                        Headers = new Dictionary<string, string> {
+                            { "Content-Type", "application/json" }
+                        }
+                    };
+                }
+
+                var client = new AmazonDynamoDBClient();
+
+                context.Logger.Log("Creating user");
+
+                var result = await client.PutItemAsync("Users", new Dictionary<string, AttributeValue>
+                {
+                    { nameof(UserModel.UserName), new AttributeValue { S = user.UserName } },
+                    { nameof(UserModel.Age), new AttributeValue { N = user.Age.ToString() } },
+                });
+
+                return new APIGatewayProxyResponse
+                {
+                    StatusCode = (int)HttpStatusCode.OK,
+                    Body = JsonSerializer.Serialize(result),
+                    Headers = new Dictionary<string, string> {
+                        { "Content-Type", "application/json" }
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                context.Logger.Log(ex.Message);
+
+                return new APIGatewayProxyResponse
+                {
+                    StatusCode = (int)HttpStatusCode.InternalServerError,
+                };
+            }
+        }
+
+        private static async Task<QueryResponse> GetUserByName(string username)
+        {
+            // Query params names
+            const string userName = nameof(UserModel.UserName);
+
+            var client = new AmazonDynamoDBClient();
+
+            var query = new QueryRequest
+            {
+                TableName = "Users",
+                KeyConditionExpression = $"{userName} = :{userName}",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue> 
+                    {
+                        { $":{userName}", new AttributeValue { S = username } }
+                    }
+            };
+
+            var response = await client.QueryAsync(query);
+
+            return response;
         }
     }
 }

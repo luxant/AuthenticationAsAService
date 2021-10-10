@@ -3,49 +3,68 @@
   "Transform": "AWS::Serverless-2016-10-31",
   "Description": "An AWS Serverless Application.",
   "Resources": {
-    "PolicyFunctionLogin":{
-        "Type" : "AWS::IAM::ManagedPolicy",
-        "DependsOn": "DynamoDBUserTable",
-        "Properties" : {
-            "PolicyDocument" : {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "ReadOnlyAPIActionsOnBooks",
-                        "Effect": "Allow",
-                        "Action": [
-                            "dynamodb:GetItem",
-                            "dynamodb:BatchGetItem",
-                            "dynamodb:Scan",
-                            "dynamodb:Query",
-                            "dynamodb:ConditionCheckItem"
-                        ],
-                        "Resource": [
-                            "arn:aws:dynamodb:*:825475072754:table/Users"
-                        ]
-                    }
-                ]
+    "PolicyReadOnlyDynamoDb": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "ReadOnlyDynamoDBTableUsers",
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:BatchGetItem",
+                "dynamodb:Scan",
+                "dynamodb:Query",
+                "dynamodb:ConditionCheckItem"
+              ],
+              "Resource": [
+                "arn:aws:dynamodb:*:825475072754:table/Users"
+              ]
             }
+          ],
+          "Version": "2012-10-17"
         }
+      }
+    },
+    "PolicyWriteDynamoDb": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "WriteDynamoDBTableUsers",
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:Query"
+              ],
+              "Resource": [
+                "arn:aws:dynamodb:*:825475072754:table/Users"
+              ]
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
     },
     "FunctionLogin": {
       "Type": "AWS::Serverless::Function",
-      "DependsOn": "PolicyFunctionLogin",
       "Properties": {
-        "Handler": "LambdaAuthentication::LambdaAuthentication.Functions::GenerateJsonWebToken",
+        "Handler": "LambdaAuthentication::LambdaAuthentication.Functions::Login",
         "Runtime": "dotnetcore3.1",
         "CodeUri": "",
         "MemorySize": 256,
         "Timeout": 30,
         "Policies": [
           "AWSLambdaBasicExecutionRole",
-          { "Ref" : "PolicyFunctionLogin" }
+          { "Ref": "PolicyReadOnlyDynamoDb" }
         ],
         "Environment": {
-            "Variables": {
-                "jwtIssuer": "MyIssuer",
-                "jwtKey": "ThisismySecretKey"
-            }
+          "Variables": {
+            "jwtIssuer": "MyIssuer",
+            "jwtKey": "ThisismySecretKey"
+          }
         },
         "Events": {
           "RootGet": {
@@ -70,10 +89,10 @@
           "AWSLambdaBasicExecutionRole"
         ],
         "Environment": {
-            "Variables": {
-                "jwtIssuer": "MyIssuer",
-                "jwtKey": "ThisismySecretKey"
-            }
+          "Variables": {
+            "jwtIssuer": "MyIssuer",
+            "jwtKey": "ThisismySecretKey"
+          }
         },
         "Events": {
           "RootGet": {
@@ -86,22 +105,51 @@
         }
       }
     },
-    "DynamoDBUserTable": {
-        "Type" : "AWS::DynamoDB::Table",
-        "Properties" : {
-            "AttributeDefinitions" : [ 
-                { "AttributeName" : "UserName", "AttributeType" : "S" }
-            ],
-            "KeySchema": [
-                { "AttributeName" : "UserName", "KeyType" : "HASH" }
-            ],
-            "BillingMode" : "PROVISIONED",
-            "TableName" : "Users",
-            "ProvisionedThroughput" : {
-                "ReadCapacityUnits" : 100,
-                "WriteCapacityUnits" : 100
+    "FunctionCreateUser": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "Handler": "LambdaAuthentication::LambdaAuthentication.Functions::CreateUser",
+        "Runtime": "dotnetcore3.1",
+        "CodeUri": "",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Policies": [
+          "AWSLambdaBasicExecutionRole",
+          { "Ref": "PolicyWriteDynamoDb" }
+        ],
+        "Events": {
+          "RootGet": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/createUser",
+              "Method": "POST"
             }
+          }
         }
+      }
+    },
+    "DynamoDBUserTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "UserName",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "UserName",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PROVISIONED",
+        "TableName": "Users",
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 100,
+          "WriteCapacityUnits": 100
+        }
+      }
     }
   },
   "Outputs": {
