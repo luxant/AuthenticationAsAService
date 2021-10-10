@@ -1,0 +1,109 @@
+{
+	"info": {
+		"_postman_id": "59e05857-e6b3-4721-87dc-8af8f7477875",
+		"name": "ServerlessAuthentication",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Login",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"UserName\": \"Peter\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://ijqar80mw8.execute-api.us-east-1.amazonaws.com/Prod/login",
+					"protocol": "https",
+					"host": [
+						"ijqar80mw8",
+						"execute-api",
+						"us-east-1",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"Prod",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Validate tokens",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJnaXZlbl9uYW1lIjoiQXdzb21lIiwiYmlydGhkYXRlIjoieWVzdGVyZGF5IiwiZXhwIjoxNjMzOTEyNjQxLCJpc3MiOiJNeUlzc3VlciIsImF1ZCI6Ik15SXNzdWVyIn0.n67g83nxpp7ZKbMNSub3wlVeWkLFRvHNqmz6qqJ-3JU",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "https://ijqar80mw8.execute-api.us-east-1.amazonaws.com/Prod/validateToken",
+					"protocol": "https",
+					"host": [
+						"ijqar80mw8",
+						"execute-api",
+						"us-east-1",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"Prod",
+						"validateToken"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create user",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"UserName\": \"SamePeter\",\r\n    \"Age\": 40\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://ijqar80mw8.execute-api.us-east-1.amazonaws.com/Prod/createUser",
+					"protocol": "https",
+					"host": [
+						"ijqar80mw8",
+						"execute-api",
+						"us-east-1",
+						"amazonaws",
+						"com"
+					],
+					"path": [
+						"Prod",
+						"createUser"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
